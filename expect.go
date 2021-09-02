@@ -20,11 +20,8 @@ import (
 	"syscall"
 	"time"
 
-	"golang.org/x/crypto/ssh"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-
 	"github.com/google/goterm/term"
+	"golang.org/x/crypto/ssh"
 )
 
 // DefaultTimeout is the default Expect timeout.
@@ -37,23 +34,23 @@ const (
 
 // Status contains an errormessage and a status code.
 type Status struct {
-	code codes.Code
+	code Code
 	msg  string
 }
 
 // NewStatus creates a Status with the provided code and message.
-func NewStatus(code codes.Code, msg string) *Status {
+func NewStatus(code Code, msg string) *Status {
 	return &Status{code, msg}
 }
 
 // NewStatusf returns a Status with the provided code and a formatted message.
-func NewStatusf(code codes.Code, format string, a ...interface{}) *Status {
+func NewStatusf(code Code, format string, a ...interface{}) *Status {
 	return NewStatus(code, fmt.Sprintf(fmt.Sprintf(format, a...)))
 }
 
 // Err is a helper to handle errors.
 func (s *Status) Err() error {
-	if s == nil || s.code == codes.OK {
+	if s == nil || s.code == StatusOK {
 		return nil
 	}
 	return s
@@ -437,7 +434,7 @@ const (
 // OK returns the OK Tag and status.
 func OK() func() (Tag, *Status) {
 	return func() (Tag, *Status) {
-		return OKTag, NewStatus(codes.OK, "state reached")
+		return OKTag, NewStatus(StatusOK, "state reached")
 	}
 }
 
@@ -458,7 +455,7 @@ func Continue(s *Status) func() (Tag, *Status) {
 // Next returns the Next Tag and status.
 func Next() func() (Tag, *Status) {
 	return func() (Tag, *Status) {
-		return NextTag, NewStatus(codes.Unimplemented, "Next returns not implemented")
+		return NextTag, NewStatus(Unimplemented, "Next returns not implemented")
 	}
 }
 
@@ -499,7 +496,7 @@ type Case struct {
 // Tag returns the tag for this case.
 func (c *Case) Tag() (Tag, *Status) {
 	if c.T == nil {
-		return NoTag, NewStatus(codes.OK, "no Tag set")
+		return NoTag, NewStatus(StatusOK, "no Tag set")
 	}
 	return c.T()
 }
@@ -549,7 +546,7 @@ func (b *BCase) String() string {
 // Tag returns the BCase Tag.
 func (b *BCase) Tag() (Tag, *Status) {
 	if b.T == nil {
-		return NoTag, NewStatus(codes.OK, "no Tag set")
+		return NoTag, NewStatus(StatusOK, "no Tag set")
 	}
 	return b.T()
 }
@@ -696,7 +693,7 @@ func (e *GExpect) check() bool {
 // Only works on Process Expecters.
 func (e *GExpect) SendSignal(sig os.Signal) error {
 	if e.cmd == nil {
-		return status.Errorf(codes.Unimplemented, "only process Expecters supported")
+		return fmt.Errorf("only process Expecters supported: %v", Unimplemented)
 	}
 	return e.cmd.Process.Signal(sig)
 }
@@ -827,7 +824,7 @@ func (e *GExpect) ExpectSwitchCase(cs []Caser, timeout time.Duration) (string, [
 			case NextTag:
 				break L1
 			default:
-				s = NewStatusf(codes.Unknown, "Tag: %d unknown, err: %v", t, s)
+				s = NewStatusf(Unknown, "Tag: %d unknown, err: %v", t, s)
 			}
 			return o, match, i, s.Err()
 		}

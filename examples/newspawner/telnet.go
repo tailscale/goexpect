@@ -4,11 +4,12 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
+	"os"
 	"time"
 
-	expect "github.com/google/goexpect"
+	expect "github.com/tailscale/goexpect"
 
-	"github.com/golang/glog"
 	"github.com/google/goterm/term"
 	"github.com/ziutek/telnet"
 )
@@ -26,12 +27,13 @@ func main() {
 	fmt.Println(term.Bluef("Telnet spawner example"))
 	exp, _, err := telnetSpawn(address, timeout, expect.Verbose(true))
 	if err != nil {
-		glog.Exitf("telnetSpawn(%q,%v) failed: %v", address, timeout, err)
+		fmt.Printf("telnetSpawn(%q,%v) failed: %v", address, timeout, err)
+		os.Exit(1)
 	}
 
 	defer func() {
 		if err := exp.Close(); err != nil {
-			glog.Infof("exp.Close failed: %v", err)
+			log.Printf("exp.Close failed: %v", err)
 		}
 	}()
 
@@ -41,7 +43,8 @@ func main() {
 		&expect.BExp{R: `\n\.`},
 	}, timeout)
 	if err != nil {
-		glog.Exitf("exp.ExpectBatch failed: %v , res: %v", err, res)
+		fmt.Printf("exp.ExpectBatch failed: %v , res: %v", err, res)
+		os.Exit(1)
 	}
 	fmt.Println(term.Greenf("Res: %s", res[len(res)-1].Output))
 

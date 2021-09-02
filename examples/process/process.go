@@ -9,9 +9,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/golang/glog"
-	expect "github.com/google/goexpect"
 	"github.com/google/goterm/term"
+	expect "github.com/tailscale/goexpect"
 )
 
 const (
@@ -24,36 +23,38 @@ var piRE = regexp.MustCompile(`3.14[0-9]*`)
 func main() {
 	flag.Parse()
 	if flag.NArg() != 1 {
-		glog.Exitf("Usage: process <nr of digits>")
+		fmt.Printf("Usage: process <nr of digits>")
+		os.Exit(1)
 	}
 
 	if err := os.Setenv("BC_LINE_LENGTH", "0"); err != nil {
-		glog.Exit(err)
+		panic(err)
 	}
 
 	scale, err := strconv.Atoi(flag.Arg(0))
 	if err != nil {
-		glog.Exit(err)
+		panic(err)
 	}
 
 	if scale < 3 {
-		glog.Exitf("scale must be at least 3 for this sample to work")
+		panic("scale must be at least 3 for this sample to work")
 	}
 
 	e, _, err := expect.Spawn(command, -1)
 	if err != nil {
-		glog.Exit(err)
+		panic(err)
 	}
 
 	if err := e.Send("scale=" + strconv.Itoa(scale) + "\n"); err != nil {
-		glog.Exit(err)
+		panic(err)
 	}
 	if err := e.Send("4*a(1)\n"); err != nil {
-		glog.Exit(err)
+		panic(err)
 	}
 	out, match, err := e.Expect(piRE, timeout)
 	if err != nil {
-		glog.Exitf("e.Expect(%q,%v) failed: %v, out: %q", piRE.String(), timeout, err, out)
+		fmt.Printf("e.Expect(%q,%v) failed: %v, out: %q", piRE.String(), timeout, err, out)
+		os.Exit(1)
 	}
 
 	fmt.Println(term.Bluef("Pi with %d digits: %s", scale, match[0]))

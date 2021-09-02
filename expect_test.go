@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -22,11 +23,6 @@ import (
 	"testing"
 	"time"
 
-	stdlog "log"
-
-	"google.golang.org/grpc/codes"
-
-	log "github.com/golang/glog"
 	term "github.com/google/goterm/term"
 
 	"golang.org/x/crypto/ssh"
@@ -135,7 +131,7 @@ func (s *SSHServer) Serve() (uint16, error) {
 		for {
 			c, err := l.Accept()
 			if err != nil {
-				log.Errorf("Accept failed: %v", err)
+				log.Printf("Accept failed: %v", err)
 				return
 			}
 			go s.runBatch(c)
@@ -173,7 +169,7 @@ func (s *SSHServer) runBatch(conn net.Conn) {
 	defer conn.Close()
 	_, chs, rq, err := ssh.NewServerConn(conn, s.cfg)
 	if err != nil {
-		log.Errorf("ssh.NewServerConn failed: %v", err)
+		log.Printf("ssh.NewServerConn failed: %v", err)
 		return
 	}
 
@@ -184,41 +180,41 @@ func (s *SSHServer) runBatch(conn net.Conn) {
 		case "session":
 			sch, in, err := ch.Accept()
 			if err != nil {
-				log.Errorf("ch.Accept failed: %v", err)
+				log.Printf("ch.Accept failed: %v", err)
 				return
 			}
 			for sess := range in {
 				switch sess.Type {
 				case "dummy":
 					if err := sess.Reply(true, nil); err != nil {
-						log.Errorf("sess.Reply(%t,nil) failed: %v", true, err)
+						log.Printf("sess.Reply(%t,nil) failed: %v", true, err)
 					}
 				case "pty-req":
 					ptyReq := ptyRequestMsg{}
 					if err := ssh.Unmarshal(sess.Payload, &ptyReq); err != nil {
 						if err := sess.Reply(false, nil); err != nil {
-							log.Errorf("sess.Reply(%t,nil) failed: %v", false, err)
+							log.Printf("sess.Reply(%t,nil) failed: %v", false, err)
 						}
-						log.Errorf("ssh.Unmarshal of PTYRequest failed: %v", err)
+						log.Printf("ssh.Unmarshal of PTYRequest failed: %v", err)
 						continue
 					}
 					if ptyReq.Columns != uint32(s.term.Wz.WsCol) || ptyReq.Rows != uint32(s.term.Wz.WsRow) {
-						log.Errorf("PTY cols/rows: %d/%d want: %d/%d", ptyReq.Columns, ptyReq.Rows, s.term.Wz.WsCol, s.term.Wz.WsRow)
+						log.Printf("PTY cols/rows: %d/%d want: %d/%d", ptyReq.Columns, ptyReq.Rows, s.term.Wz.WsCol, s.term.Wz.WsRow)
 						if err := sess.Reply(false, nil); err != nil {
-							log.Errorf("sess.Reply(%t,nil) failed: %v", false, err)
+							log.Printf("sess.Reply(%t,nil) failed: %v", false, err)
 						}
 						continue
 					}
 
 					if err := sess.Reply(true, nil); err != nil {
-						log.Errorf("sess.Reply(%t,nil) failed: %v", true, err)
+						log.Printf("sess.Reply(%t,nil) failed: %v", true, err)
 					}
 				case "shell":
-					log.Infof("Shell request coming in")
+					log.Printf("Shell request coming in")
 					resCh := make(chan error)
 					defer close(resCh)
 					if err := sess.Reply(true, nil); err != nil {
-						log.Errorf("sess.Reply(%t,nil) failed: %v", true, err)
+						log.Printf("sess.Reply(%t,nil) failed: %v", true, err)
 					}
 
 					rIn, wIn := io.Pipe()
@@ -240,7 +236,7 @@ func (s *SSHServer) runBatch(conn net.Conn) {
 						s.Lock()
 						out, err := exp.ExpectBatch(s.batch, testTimeout*2)
 						if err != nil {
-							log.Errorf("exp.ExpectBatch(%v) failed: %v, res: %v", s.batch, err, out)
+							log.Printf("exp.ExpectBatch(%v) failed: %v, res: %v", s.batch, err, out)
 						}
 						s.Unlock()
 					}()
@@ -265,7 +261,7 @@ func NewTc() (t Tc) {
 func (t Tc) Count(msg string, s *Status) func() (Tag, *Status) {
 	return func() (Tag, *Status) {
 		t++
-		log.Infof("%d: %s", t, msg)
+		log.Printf("%d: %s", t, msg)
 		return ContinueTag, s
 	}
 }
@@ -274,8 +270,8 @@ func (t Tc) Count(msg string, s *Status) func() (Tag, *Status) {
 func (t Tc) NextLog(msg string) func() (Tag, *Status) {
 	return func() (Tag, *Status) {
 		t++
-		log.Infof("Next %d: %s", t, msg)
-		return NextTag, NewStatus(codes.Unimplemented, "Should not matter")
+		log.Printf("Next %d: %s", t, msg)
+		return NextTag, NewStatus(Unimplemented, "Should not matter")
 	}
 }
 
@@ -300,16 +296,16 @@ func TestBatcher(t *testing.T) {
 			name: "Login caser",
 			clt: []Batcher{
 				&BCas{[]Caser{
-					&Case{R: regexp.MustCompile(`Login: `), S: "TestUser\n", T: LogContinue("at login prompt", NewStatus(codes.PermissionDenied, "wrong username")), Rt: 1},
-					&Case{R: regexp.MustCompile(`Password: `), S: "TestPass\n", T: LogContinue("at password prompt", NewStatus(codes.PermissionDenied, "wrong pass")), Rt: 1},
-					&Case{R: regexp.MustCompile(`Permission denied`), T: Fail(NewStatus(codes.PermissionDenied, "login failed"))},
+					&Case{R: regexp.MustCompile(`Login: `), S: "TestUser\n", T: LogContinue("at login prompt", NewStatus(PermissionDenied, "wrong username")), Rt: 1},
+					&Case{R: regexp.MustCompile(`Password: `), S: "TestPass\n", T: LogContinue("at password prompt", NewStatus(PermissionDenied, "wrong pass")), Rt: 1},
+					&Case{R: regexp.MustCompile(`Permission denied`), T: Fail(NewStatus(PermissionDenied, "login failed"))},
 					&Case{R: regexp.MustCompile(`router 1>`), T: OK()},
 				}},
 			},
 			srv: []Batcher{
 				&BSnd{"Login: "},
 				&BCas{[]Caser{
-					&Case{R: regexp.MustCompile("TestUser\n"), S: `Password: `, T: Continue(NewStatus(codes.PermissionDenied, "permission denied")), Rt: 3},
+					&Case{R: regexp.MustCompile("TestUser\n"), S: `Password: `, T: Continue(NewStatus(PermissionDenied, "permission denied")), Rt: 3},
 					&Case{R: regexp.MustCompile("TestPass\n"), S: `router 1> `, T: OK()},
 				},
 				},
@@ -319,12 +315,12 @@ func TestBatcher(t *testing.T) {
 				&BSnd{`Hello `},
 				&BCas{[]Caser{
 					&Case{R: regexp.MustCompile("Done"), T: OK()},
-					&Case{R: regexp.MustCompile("World"), S: "Hello ", T: NewTc().Count("Hello", NewStatus(codes.OutOfRange, "too many worlds")), Rt: 100},
+					&Case{R: regexp.MustCompile("World"), S: "Hello ", T: NewTc().Count("Hello", NewStatus(OutOfRange, "too many worlds")), Rt: 100},
 				}},
 			},
 			srv: []Batcher{
 				&BCas{[]Caser{
-					&Case{R: regexp.MustCompile("Hello"), S: "World\n", T: NewTc().Count("World", NewStatus(codes.OK, "too many hellos")), Rt: 99},
+					&Case{R: regexp.MustCompile("Hello"), S: "World\n", T: NewTc().Count("World", NewStatus(StatusOK, "too many hellos")), Rt: 99},
 				}},
 				&BSnd{"Done"},
 			},
@@ -334,13 +330,13 @@ func TestBatcher(t *testing.T) {
 				&BSnd{`Hello `},
 				&BCas{[]Caser{
 					&Case{R: regexp.MustCompile("Done"), T: OK()},
-					&Case{R: regexp.MustCompile("World"), S: "Hello ", T: NewTc().Count("Hello", NewStatus(codes.OutOfRange, "too many worlds")), Rt: 100},
+					&Case{R: regexp.MustCompile("World"), S: "Hello ", T: NewTc().Count("Hello", NewStatus(OutOfRange, "too many worlds")), Rt: 100},
 				}},
 			},
 			srv: []Batcher{
 				&BCas{[]Caser{
 					&Case{R: regexp.MustCompile("Hello"), S: "World\n", T: NewTc().NextLog("World"), Rt: 99},
-					&Case{R: regexp.MustCompile("Hello"), S: "Done\n", T: LogContinue("Done sent", NewStatus(codes.OK, "Done sent"))},
+					&Case{R: regexp.MustCompile("Hello"), S: "Done\n", T: LogContinue("Done sent", NewStatus(StatusOK, "Done sent"))},
 				}},
 			},
 		},
@@ -437,7 +433,7 @@ func fakeCli(tMap map[string]string, in io.Reader, out io.Writer) {
 		}
 		_, err := out.Write([]byte(tst))
 		if err != nil {
-			log.Warningf("Write of %q failed: %v", tst, err)
+			log.Printf("Write of %q failed: %v", tst, err)
 			return
 		}
 	}
@@ -464,19 +460,19 @@ func ExampleDebugCheck() {
 			return true
 		}}, -1)
 	if err != nil {
-		log.Errorf("SpawnGeneric failed: %v", err)
+		log.Printf("SpawnGeneric failed: %v", err)
 		return
 	}
 	re := regexp.MustCompile("testrouter#")
 	interact := func() {
 		for cmd := range cliMap {
 			if err := exp.Send(cmd + "\n"); err != nil {
-				log.Errorf("exp.Send(%q) failed: %v\n", cmd+"\n", err)
+				log.Printf("exp.Send(%q) failed: %v\n", cmd+"\n", err)
 				return
 			}
 			out, _, err := exp.Expect(re, -1)
 			if err != nil {
-				log.Errorf("exp.Expect(%v) failed: %v out: %v", re, err, out)
+				log.Printf("exp.Expect(%v) failed: %v out: %v", re, err, out)
 				return
 			}
 		}
@@ -498,7 +494,7 @@ func ExampleDebugCheck() {
 	fmt.Println("First round")
 	interact()
 	fmt.Println("Second round - Debugging enabled")
-	prev := exp.Options(DebugCheck(stdlog.New(wLog, "DebugExample ", 0)))
+	prev := exp.Options(DebugCheck(log.New(wLog, "DebugExample ", 0)))
 	interact()
 	exp.Options(prev)
 	fmt.Println("Last round - Previous Check put back")
